@@ -1,0 +1,441 @@
+{% extends 'base.html' %}
+{% block content %}
+
+{# ── 全タスク数 ── #}
+{% set ns = namespace(total=0) %}
+{% for s, lst in tasks_by_status.items() %}{% set ns.total = ns.total + lst|length %}{% endfor %}
+
+<style>
+  /* ── Top bar ── */
+  .topbar {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .topbar-stat {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 14px;
+    font-size: .82rem; font-weight: 700;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .topbar-hint {
+    margin-left: auto; font-size: .75rem; color: var(--dim);
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  /* ── Add panel ── */
+  .add-panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+    margin-bottom: 14px; overflow: hidden;
+    max-height: 0; transition: max-height .3s ease, padding .3s ease, opacity .3s ease;
+    opacity: 0; padding-top: 0; padding-bottom: 0;
+  }
+  .add-panel.open {
+    max-height: 300px; opacity: 1;
+    padding-top: 16px; padding-bottom: 16px;
+  }
+
+  /* ── Kanban board ── */
+  .kanban-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+
+  .kanban-col-wrap {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    min-height: 120px;
+  }
+  .kanban-col-header {
+    padding: 11px 14px;
+    font-weight: 700; font-size: .85rem;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .col-not_started .kanban-col-header { border-top: 3px solid #64748b; }
+  .col-in_progress .kanban-col-header { border-top: 3px solid #3b82f6; }
+  .col-withdrawn   .kanban-col-header { border-top: 3px solid #ef4444; }
+  .col-completed   .kanban-col-header { border-top: 3px solid #22c55e; }
+
+  .col-count {
+    margin-left: auto; background: var(--bg4); border-radius: 10px;
+    padding: 1px 8px; font-size: .72rem; color: var(--dim);
+  }
+
+  /* ── Card list (SortableJS target) ── */
+  .kanban-cards {
+    padding: 8px; min-height: 60px;
+    display: flex; flex-direction: column; gap: 7px;
+    background: var(--bg2);
+  }
+
+  /* ── Task card ── */
+  .task-card {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 9px; padding: 10px 11px;
+    cursor: grab; position: relative;
+    transition: box-shadow .15s, border-color .15s;
+    border-left: 3px solid var(--border);
+  }
+  .task-card:hover {
+    border-color: rgba(255,215,0,.35);
+    box-shadow: 0 4px 18px rgba(0,0,0,.35);
+  }
+  .task-card:active { cursor: grabbing; }
+
+  /* Priority accent: top 3 in each column get colored left border */
+  .task-card[data-rank="0"] { border-left-color: #ef4444; }
+  .task-card[data-rank="1"] { border-left-color: #f97316; }
+  .task-card[data-rank="2"] { border-left-color: #eab308; }
+
+  /* SortableJS states */
+  .task-card.sortable-ghost   { opacity: .3; background: var(--bg4); }
+  .task-card.sortable-chosen  { box-shadow: 0 10px 36px rgba(0,0,0,.6);
+                                 border-color: rgba(255,215,0,.6); z-index: 100; }
+  .task-card.sortable-drag    { opacity: 1; }
+
+  /* Drop zone highlight */
+  .kanban-cards.drag-over { background: rgba(255,215,0,.04); outline: 2px dashed rgba(255,215,0,.25); outline-offset: -3px; }
+
+  /* Card inner elements */
+  .card-header-row {
+    display: flex; align-items: flex-start;
+    gap: 6px; margin-bottom: 6px;
+  }
+  .card-rank-badge {
+    flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--bg4); display: flex; align-items: center; justify-content: center;
+    font-size: .62rem; font-weight: 800; color: var(--dim); margin-top: 1px;
+  }
+  .card-rank-badge.rank-0 { background: rgba(239,68,68,.25);  color: #f87171; }
+  .card-rank-badge.rank-1 { background: rgba(249,115,22,.2);  color: #fb923c; }
+  .card-rank-badge.rank-2 { background: rgba(234,179,8,.18);  color: #fbbf24; }
+
+  .card-title {
+    flex: 1; font-weight: 700; font-size: .87rem; line-height: 1.35;
+  }
+  .card-title.done { text-decoration: line-through; color: var(--dim); }
+
+  .card-delete {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    border: none; background: transparent; color: transparent;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: .72rem; transition: all .15s; margin-top: 1px;
+  }
+  .task-card:hover .card-delete { color: #f87171; background: rgba(220,38,38,.2); }
+  .card-delete:hover { color: #fff !important; background: rgba(220,38,38,.55) !important; }
+
+  .card-desc {
+    font-size: .74rem; color: var(--dim); line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; margin-bottom: 7px;
+  }
+  .card-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 6px; border-top: 1px solid rgba(255,255,255,.05);
+    font-size: .68rem; color: var(--dim);
+  }
+  .card-pts { color: var(--gold); font-weight: 800; font-size: .75rem; }
+
+  /* Empty column placeholder */
+  .kanban-empty {
+    border: 1.5px dashed rgba(255,255,255,.08); border-radius: 8px;
+    padding: 22px 10px; text-align: center;
+    color: var(--dim); font-size: .75rem;
+    pointer-events: none;
+  }
+
+  /* Points popup animation */
+  .pts-popup {
+    position: fixed; pointer-events: none; z-index: 9999;
+    font-size: 1.8rem; font-weight: 800; color: var(--gold);
+    text-shadow: 0 0 24px rgba(255,215,0,.9), 0 2px 8px rgba(0,0,0,.5);
+    animation: ptsFloat 2s ease-out forwards;
+  }
+  @keyframes ptsFloat {
+    0%   { opacity: 1; transform: translateY(0)   scale(1);    }
+    30%  { opacity: 1; transform: translateY(-30px) scale(1.2); }
+    100% { opacity: 0; transform: translateY(-90px) scale(.8);  }
+  }
+</style>
+
+<!-- ── Top bar ── -->
+<div class="topbar">
+  <button class="btn btn-primary" id="add-btn" onclick="toggleAddPanel()">＋ タスクを追加</button>
+  <div class="topbar-stat" style="color:var(--gold);">⭐ <span id="pts-display">{{ avatar.points }}</span> pt</div>
+  <div class="topbar-stat" style="color:#a78bfa;">🌟 Lv.{{ avatar.level }}</div>
+  <div class="topbar-stat" style="color:var(--success);">
+    ✅ {{ tasks_by_status['completed']|length }} / {{ ns.total }} 完了
+  </div>
+  <div class="topbar-hint">
+    <span>↔ ドラッグでステータス変更</span>
+    <span style="opacity:.4;">|</span>
+    <span>↕ ドラッグで優先度変更</span>
+  </div>
+</div>
+
+<!-- ── Add task panel ── -->
+<div class="add-panel" id="add-panel">
+  <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+    <div style="flex:1;min-width:180px;">
+      <label>タスク名 <span style="color:var(--error);">*</span></label>
+      <input type="text" id="new-title" placeholder="タスク名を入力..." autocomplete="off">
+    </div>
+    <div style="flex:2;min-width:220px;">
+      <label>説明（任意）</label>
+      <input type="text" id="new-desc" placeholder="詳細を入力...">
+    </div>
+    <button class="btn btn-primary" onclick="submitAddTask()" style="height:38px;">追加</button>
+    <button class="btn btn-ghost" onclick="toggleAddPanel()" style="height:38px;">キャンセル</button>
+  </div>
+  <div id="add-error" style="color:var(--error);font-size:.8rem;margin-top:8px;display:none;"></div>
+</div>
+
+<!-- ── Kanban board ── -->
+<div class="kanban-board" id="kanban-board">
+
+  {% set columns = [
+    ('not_started', '⬜ 未着手',   'col-not_started'),
+    ('in_progress', '🔄 実行中',   'col-in_progress'),
+    ('withdrawn',   '❌ 取り下げ', 'col-withdrawn'),
+    ('completed',   '✅ 完了',     'col-completed'),
+  ] %}
+
+  {% for status, label, cls in columns %}
+  {% set tasks = tasks_by_status[status] %}
+  <div class="kanban-col-wrap {{ cls }}" id="col-{{ status }}">
+    <div class="kanban-col-header">
+      {{ label }}
+      <span class="col-count" id="count-{{ status }}">{{ tasks|length }}</span>
+    </div>
+    <div class="kanban-cards" id="cards-{{ status }}" data-status="{{ status }}">
+      {% for task in tasks %}
+      {% set rank = loop.index0 %}
+      <div class="task-card"
+           data-task-id="{{ task.id }}"
+           data-rank="{{ rank if rank < 3 else 'none' }}">
+        <div class="card-header-row">
+          <div class="card-rank-badge {% if rank < 3 %}rank-{{ rank }}{% endif %}">{{ rank + 1 }}</div>
+          <div class="card-title {% if status == 'completed' %}done{% endif %}">{{ task.title }}</div>
+          <button class="card-delete" onclick="deleteTask(event, {{ task.id }})" title="削除">✕</button>
+        </div>
+        {% if task.description %}
+        <div class="card-desc">{{ task.description }}</div>
+        {% endif %}
+        <div class="card-footer">
+          <span>{{ task.created_at.strftime('%m/%d %H:%M') }}</span>
+          {% if task.points_earned > 0 %}
+          <span class="card-pts">+{{ task.points_earned }} pt ⭐</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if not tasks %}
+      <div class="kanban-empty" id="empty-{{ status }}">タスクなし</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+
+<!-- SortableJS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<script>
+// ── Add panel toggle ──
+function toggleAddPanel() {
+  const panel = document.getElementById('add-panel');
+  const btn   = document.getElementById('add-btn');
+  const open  = panel.classList.toggle('open');
+  btn.textContent = open ? '✕ 閉じる' : '＋ タスクを追加';
+  if (open) setTimeout(() => document.getElementById('new-title').focus(), 300);
+}
+
+// ── Add task via AJAX ──
+async function submitAddTask() {
+  const title = document.getElementById('new-title').value.trim();
+  const desc  = document.getElementById('new-desc').value.trim();
+  const errEl = document.getElementById('add-error');
+  errEl.style.display = 'none';
+
+  if (!title) {
+    errEl.textContent = 'タスク名を入力してください。';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('description', desc);
+  const res = await fetch('/tasks/add', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { errEl.textContent = data.error; errEl.style.display = 'block'; return; }
+
+  // Add card to DOM
+  const container = document.getElementById('cards-not_started');
+  removeEmpty('not_started');
+  const card = buildCard(data.id, data.title, data.description, data.created_at, false, 0);
+  container.appendChild(card);
+  refreshRanks('not_started');
+  updateCount('not_started');
+
+  document.getElementById('new-title').value = '';
+  document.getElementById('new-desc').value  = '';
+  toggleAddPanel();
+}
+
+document.getElementById('new-title').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitAddTask();
+});
+
+// ── Delete task via AJAX ──
+async function deleteTask(evt, taskId) {
+  evt.stopPropagation();
+  const card = evt.target.closest('.task-card');
+  const status = card.closest('.kanban-cards').dataset.status;
+
+  const fd = new FormData();
+  const res = await fetch(`/tasks/delete/${taskId}`, { method: 'POST', body: fd });
+  if (!res.ok) return;
+
+  card.style.transition = 'opacity .2s, transform .2s';
+  card.style.opacity = '0';
+  card.style.transform = 'scale(.9)';
+  setTimeout(() => {
+    card.remove();
+    refreshRanks(status);
+    updateCount(status);
+    checkEmpty(status);
+  }, 200);
+}
+
+// ── SortableJS setup ──
+const STATUS_ORDER = ['not_started', 'in_progress', 'withdrawn', 'completed'];
+
+STATUS_ORDER.forEach(status => {
+  const el = document.getElementById(`cards-${status}`);
+  Sortable.create(el, {
+    group:        'tasks',
+    animation:    160,
+    ghostClass:   'sortable-ghost',
+    chosenClass:  'sortable-chosen',
+    dragClass:    'sortable-drag',
+    swapThreshold: 0.65,
+
+    onStart(evt) {
+      document.querySelectorAll('.kanban-cards').forEach(c => c.classList.add('drag-over'));
+    },
+    onEnd(evt) {
+      document.querySelectorAll('.kanban-cards').forEach(c => c.classList.remove('drag-over'));
+
+      const taskId   = parseInt(evt.item.dataset.taskId);
+      const newStatus = evt.to.dataset.status;
+      const colIds   = [...evt.to.querySelectorAll('.task-card')].map(c => parseInt(c.dataset.taskId));
+
+      // Update done style
+      const titleEl = evt.item.querySelector('.card-title');
+      if (newStatus === 'completed') titleEl.classList.add('done');
+      else                           titleEl.classList.remove('done');
+
+      // Re-rank all columns involved
+      refreshRanks(evt.from.dataset.status);
+      refreshRanks(newStatus);
+      updateCount(evt.from.dataset.status);
+      updateCount(newStatus);
+      checkEmpty(evt.from.dataset.status);
+      checkEmpty(newStatus);
+
+      fetch('/tasks/reorder', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ task_id: taskId, new_status: newStatus, column_order: colIds }),
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.points) {
+          showPtsPopup(evt.item, data.points);
+          document.getElementById('pts-display').textContent = data.total_points;
+        }
+      });
+    }
+  });
+});
+
+// ── Rank badges ──
+function refreshRanks(status) {
+  const cards = [...document.querySelectorAll(`#cards-${status} .task-card`)];
+  cards.forEach((card, i) => {
+    card.dataset.rank = i < 3 ? i : 'none';
+    const badge = card.querySelector('.card-rank-badge');
+    badge.textContent = i + 1;
+    badge.className = 'card-rank-badge' + (i < 3 ? ` rank-${i}` : '');
+  });
+}
+
+// ── Column counts ──
+function updateCount(status) {
+  const cards = document.querySelectorAll(`#cards-${status} .task-card`).length;
+  document.getElementById(`count-${status}`).textContent = cards;
+}
+
+// ── Empty placeholder ──
+function checkEmpty(status) {
+  const container = document.getElementById(`cards-${status}`);
+  const hasCards  = container.querySelector('.task-card');
+  let empty = container.querySelector('.kanban-empty');
+  if (!hasCards && !empty) {
+    empty = document.createElement('div');
+    empty.className = 'kanban-empty';
+    empty.id = `empty-${status}`;
+    empty.textContent = 'タスクなし';
+    container.appendChild(empty);
+  } else if (hasCards && empty) {
+    empty.remove();
+  }
+}
+
+function removeEmpty(status) {
+  document.getElementById(`empty-${status}`)?.remove();
+}
+
+// ── Points popup ──
+function showPtsPopup(card, pts) {
+  const rect = card.getBoundingClientRect();
+  const el   = document.createElement('div');
+  el.className = 'pts-popup';
+  el.textContent = `+${pts} pt ⭐`;
+  el.style.left = `${rect.left + rect.width / 2 - 40}px`;
+  el.style.top  = `${rect.top + window.scrollY}px`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2100);
+}
+
+// ── Build card (for AJAX add) ──
+function buildCard(id, title, desc, createdAt, done, rank) {
+  const card = document.createElement('div');
+  card.className  = 'task-card';
+  card.dataset.taskId = id;
+  card.dataset.rank   = rank < 3 ? rank : 'none';
+  const rankCls = rank < 3 ? ` rank-${rank}` : '';
+  card.innerHTML = `
+    <div class="card-header-row">
+      <div class="card-rank-badge${rankCls}">${rank + 1}</div>
+      <div class="card-title${done ? ' done' : ''}">${escHtml(title)}</div>
+      <button class="card-delete" onclick="deleteTask(event, ${id})" title="削除">✕</button>
+    </div>
+    ${desc ? `<div class="card-desc">${escHtml(desc)}</div>` : ''}
+    <div class="card-footer">
+      <span>${createdAt}</span>
+    </div>`;
+  return card;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

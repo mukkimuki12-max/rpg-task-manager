@@ -1,0 +1,636 @@
+{% extends 'base.html' %}
+{% block content %}
+
+{# ── shorthand refs ── #}
+{% set helmet_inv = equipped_by_type.get('helmet') %}
+{% set weapon_inv = equipped_by_type.get('weapon') %}
+{% set armor_inv  = equipped_by_type.get('armor')  %}
+{% set shield_inv = equipped_by_type.get('shield') %}
+{% set boots_inv  = equipped_by_type.get('boots')  %}
+
+{# ── arm / misc colors follow armor rarity ── #}
+{% set ns = namespace(arm='#374151') %}
+{% if armor_inv %}
+  {% if   armor_inv.item.rarity == 'epic' %}{% set ns.arm = '#6d28d9' %}
+  {% elif armor_inv.item.rarity == 'rare' %}{% set ns.arm = '#1d4ed8' %}
+  {% else %}{% set ns.arm = '#78350f' %}{% endif %}
+{% endif %}
+
+<style>
+  /* ── page layout ── */
+  .page-grid { display:grid; grid-template-columns:290px 1fr 1fr; gap:18px; align-items:start; }
+
+  /* ── equipment / inventory item cards ── */
+  .equip-slot {
+    background:var(--bg3); border:1px dashed var(--border);
+    border-radius:10px; padding:10px 12px;
+    display:flex; align-items:center; gap:10px; min-height:54px;
+    transition:border-color .2s;
+  }
+  .equip-slot.filled { border-style:solid; border-color:rgba(255,215,0,.45); }
+  .slot-icon  { font-size:1.4rem; flex-shrink:0; }
+  .slot-label { font-size:.7rem; color:var(--dim); font-weight:700; }
+  .slot-name  { font-size:.83rem; font-weight:700; }
+  .slot-bonus { font-size:.7rem; color:var(--success); }
+
+  .inv-item, .shop-item {
+    background:var(--bg3); border:1px solid var(--border);
+    border-radius:10px; padding:11px 13px;
+    display:flex; align-items:center; gap:10px;
+    transition:border-color .2s;
+  }
+  .inv-item:hover, .shop-item:hover { border-color:rgba(255,215,0,.3); }
+  .inv-item.equipped { border-color:rgba(34,197,94,.5); background:rgba(34,197,94,.04); }
+  .item-emoji { font-size:1.5rem; flex-shrink:0; }
+  .item-info  { flex:1; min-width:0; }
+  .item-name  { font-weight:700; font-size:.88rem; }
+  .item-meta  { font-size:.73rem; color:var(--dim); margin-top:2px; }
+  .item-bonus { font-size:.73rem; color:var(--success); margin-top:2px; }
+  .item-price { font-size:.8rem; color:var(--gold); font-weight:700; }
+  .section-hdr {
+    font-size:.72rem; font-weight:700; color:var(--dim);
+    text-transform:uppercase; letter-spacing:1px;
+    margin:14px 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border);
+  }
+
+  /* ── SVG animation helpers ── */
+  @keyframes orbPulse { 0%,100%{opacity:.65} 50%{opacity:1} }
+  @keyframes runeFloat { 0%,100%{opacity:.45} 50%{opacity:.9} }
+  @keyframes crownShine { 0%,100%{opacity:.7} 50%{opacity:1} }
+  @keyframes auraBreath { 0%,100%{opacity:.5;transform:scale(1)} 50%{opacity:.8;transform:scale(1.07)} }
+  @keyframes magicTrail { 0%{opacity:0} 50%{opacity:.7} 100%{opacity:0} }
+  .orb-pulse  { animation: orbPulse 2s ease-in-out infinite; }
+  .rune-glow  { animation: runeFloat 2.5s ease-in-out infinite; }
+  .crown-gem  { animation: crownShine 1.8s ease-in-out infinite; }
+  .aura       { animation: auraBreath 3s ease-in-out infinite; transform-origin:50% 50%; }
+</style>
+
+<div class="page-grid">
+
+  <!-- ══════════════ LEFT: Avatar ══════════════ -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <div class="card" style="border-color:rgba(109,40,217,.4);">
+      <div class="card-title">🧙 {{ avatar.name }}</div>
+
+      <!-- ════ SVG AVATAR ════ -->
+      <div style="display:flex;justify-content:center;margin-bottom:16px;">
+        <svg viewBox="0 0 120 185" width="200" height="308" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <!-- Skin gradient -->
+            <radialGradient id="sg" cx="40%" cy="38%" r="62%">
+              <stop offset="0%" stop-color="#fde8c0"/>
+              <stop offset="100%" stop-color="#d4956a"/>
+            </radialGradient>
+            <!-- Magic glow filter -->
+            <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="glow-sm" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.5" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- ── Aura ── -->
+          {% if armor_inv and armor_inv.item.rarity == 'epic' %}
+          <ellipse class="aura" cx="60" cy="95" rx="62" ry="70" fill="rgba(109,40,217,.18)"/>
+          <ellipse class="aura" cx="60" cy="95" rx="45" ry="52" fill="rgba(168,85,247,.1)" style="animation-delay:.8s"/>
+          {% elif weapon_inv and weapon_inv.item.name == '魔法の杖' %}
+          <ellipse class="aura" cx="60" cy="95" rx="58" ry="66" fill="rgba(124,58,237,.15)"/>
+          {% endif %}
+
+          <!-- ── Shadow ── -->
+          <ellipse cx="60" cy="182" rx="29" ry="6" fill="#000" opacity=".28"/>
+
+          <g>
+
+          <!-- ══ LEFT ARM (weapon side) ══ -->
+          <rect x="3" y="66" width="23" height="52" rx="10" fill="{{ ns.arm }}"/>
+          <!-- sleeve detail for robe -->
+          {% if armor_inv and armor_inv.item.name == '魔法のローブ' %}
+          <path d="M3,80 Q-2,100 6,118" fill="none" stroke="rgba(196,167,252,.5)" stroke-width="2"/>
+          {% endif %}
+          <!-- Hand (left) -->
+          <circle cx="14.5" cy="120" r="7.5" fill="url(#sg)"/>
+
+          <!-- ══ RIGHT ARM (shield side) ══ -->
+          <rect x="94" y="66" width="23" height="52" rx="10" fill="{{ ns.arm }}"/>
+          {% if armor_inv and armor_inv.item.name == '魔法のローブ' %}
+          <path d="M117,80 Q122,100 114,118" fill="none" stroke="rgba(196,167,252,.5)" stroke-width="2"/>
+          {% endif %}
+          <!-- Hand (right) -->
+          <circle cx="105.5" cy="120" r="7.5" fill="url(#sg)"/>
+
+          <!-- ══ LEGS ══ -->
+          <rect x="33" y="126" width="20" height="48" rx="8" fill="#2d3748"/>
+          <rect x="67" y="126" width="20" height="48" rx="8" fill="#2d3748"/>
+
+          <!-- ══ BOOTS ══ -->
+          {% if boots_inv %}
+            {% if boots_inv.item.name == '革のブーツ' %}
+              <!-- Leather boots: shaft + rounded toe -->
+              <rect x="29" y="150" width="25" height="24" rx="5" fill="#78350f"/>
+              <rect x="67" y="150" width="25" height="24" rx="5" fill="#78350f"/>
+              <rect x="26" y="160" width="31" height="13" rx="6" fill="#92400e"/>
+              <rect x="63" y="160" width="31" height="13" rx="6" fill="#92400e"/>
+              <ellipse cx="41" cy="173" rx="15" ry="5" fill="#5D2F0D"/>
+              <ellipse cx="78" cy="173" rx="15" ry="5" fill="#5D2F0D"/>
+              <!-- Boot buckle -->
+              <rect x="34" y="153" width="11" height="4" rx="2" fill="#b8960c"/>
+              <rect x="72" y="153" width="11" height="4" rx="2" fill="#b8960c"/>
+              <rect x="37" y="154" width="5" height="2" rx="1" fill="#ffd700"/>
+              <rect x="75" y="154" width="5" height="2" rx="1" fill="#ffd700"/>
+            {% elif boots_inv.item.name == '魔法のサンダル' %}
+              <!-- Magic sandals: thin sole + visible straps + glow -->
+              <rect x="26" y="164" width="31" height="9" rx="4" fill="#6d28d9"/>
+              <rect x="63" y="164" width="31" height="9" rx="4" fill="#6d28d9"/>
+              <!-- Straps left -->
+              <rect x="29" y="153" width="5" height="13" rx="2.5" fill="#a855f7"/>
+              <rect x="39" y="150" width="5" height="16" rx="2.5" fill="#7c3aed"/>
+              <rect x="49" y="153" width="5" height="13" rx="2.5" fill="#a855f7"/>
+              <!-- Straps right -->
+              <rect x="66" y="153" width="5" height="13" rx="2.5" fill="#a855f7"/>
+              <rect x="76" y="150" width="5" height="16" rx="2.5" fill="#7c3aed"/>
+              <rect x="86" y="153" width="5" height="13" rx="2.5" fill="#a855f7"/>
+              <!-- Center gem on strap -->
+              <circle cx="42" cy="152" r="3" fill="#c084fc" filter="url(#glow-sm)"/>
+              <circle cx="41" cy="151" r="1" fill="rgba(255,255,255,.8)"/>
+              <circle cx="79" cy="152" r="3" fill="#c084fc" filter="url(#glow-sm)"/>
+              <circle cx="78" cy="151" r="1" fill="rgba(255,255,255,.8)"/>
+              <!-- Magic glow under feet -->
+              <ellipse class="rune-glow" cx="41" cy="173" rx="17" ry="5" fill="rgba(167,139,250,.55)"/>
+              <ellipse class="rune-glow" cx="78" cy="173" rx="17" ry="5" fill="rgba(167,139,250,.55)" style="animation-delay:.6s"/>
+            {% endif %}
+          {% else %}
+            <!-- Default bare boots -->
+            <rect x="29" y="158" width="25" height="16" rx="5" fill="#3d2b1f"/>
+            <rect x="66" y="158" width="25" height="16" rx="5" fill="#3d2b1f"/>
+            <ellipse cx="41" cy="174" rx="14" ry="5" fill="#2d1b0e"/>
+            <ellipse cx="79" cy="174" rx="14" ry="5" fill="#2d1b0e"/>
+          {% endif %}
+
+          <!-- ══ BODY / ARMOR ══ -->
+          {% if armor_inv %}
+            {% if armor_inv.item.name == '革の鎧' %}
+              <!-- ── Leather Armor ── brown, stitching, shoulder pads -->
+              <rect x="27" y="62" width="66" height="68" rx="10" fill="#92400e"/>
+              <!-- Stitching lines -->
+              <line x1="60" y1="67" x2="60" y2="127" stroke="#5D2F0D" stroke-width="1.5" opacity=".5"/>
+              <line x1="32" y1="80" x2="88" y2="80" stroke="#5D2F0D" stroke-width="1" opacity=".4"/>
+              <line x1="32" y1="96" x2="88" y2="96" stroke="#5D2F0D" stroke-width="1" opacity=".4"/>
+              <line x1="32" y1="112" x2="88" y2="112" stroke="#5D2F0D" stroke-width="1" opacity=".3"/>
+              <!-- Chest strap X -->
+              <line x1="38" y1="67" x2="60" y2="90" stroke="#78350f" stroke-width="2" opacity=".5"/>
+              <line x1="82" y1="67" x2="60" y2="90" stroke="#78350f" stroke-width="2" opacity=".5"/>
+              <!-- Shoulder pads -->
+              <ellipse cx="27" cy="68" rx="10" ry="7" fill="#78350f"/>
+              <ellipse cx="93" cy="68" rx="10" ry="7" fill="#78350f"/>
+              <ellipse cx="27" cy="67" rx="8" ry="5" fill="#92400e" opacity=".5"/>
+              <ellipse cx="93" cy="67" rx="8" ry="5" fill="#92400e" opacity=".5"/>
+              <!-- Waist belt -->
+              <rect x="27" y="118" width="66" height="8" rx="4" fill="#5D2F0D"/>
+              <rect x="54" y="118" width="12" height="8" rx="2" fill="#b8960c"/>
+              <circle cx="60" cy="122" r="3" fill="#ffd700"/>
+
+            {% elif armor_inv.item.name == '鉄の鎧' %}
+              <!-- ── Iron Armor ── steel plates, pauldrons, rivets -->
+              <!-- Back layer: lower abdomen plate -->
+              <rect x="27" y="96" width="66" height="34" rx="6" fill="#374151"/>
+              <!-- Main breastplate -->
+              <rect x="27" y="62" width="66" height="38" rx="8" fill="#4b5563"/>
+              <rect x="32" y="66" width="56" height="30" rx="6" fill="#6b7280"/>
+              <!-- Center ridge / keel -->
+              <path d="M60,64 L60,130" stroke="#374151" stroke-width="3"/>
+              <path d="M60,64 L60,130" stroke="#9ca3af" stroke-width="1" opacity=".4"/>
+              <!-- Horizontal plate seam -->
+              <rect x="27" y="94" width="66" height="5" rx="2" fill="#374151"/>
+              <!-- Chest muscle curves -->
+              <path d="M38,70 Q48,80 60,77" fill="none" stroke="#9ca3af" stroke-width="1.5" opacity=".6"/>
+              <path d="M82,70 Q72,80 60,77" fill="none" stroke="#9ca3af" stroke-width="1.5" opacity=".6"/>
+              <!-- Rivets -->
+              <circle cx="34" cy="70" r="2.5" fill="#374151"/><circle cx="34" cy="70" r="1" fill="#9ca3af"/>
+              <circle cx="86" cy="70" r="2.5" fill="#374151"/><circle cx="86" cy="70" r="1" fill="#9ca3af"/>
+              <circle cx="34" cy="120" r="2.5" fill="#374151"/><circle cx="34" cy="120" r="1" fill="#9ca3af"/>
+              <circle cx="86" cy="120" r="2.5" fill="#374151"/><circle cx="86" cy="120" r="1" fill="#9ca3af"/>
+              <!-- Pauldrons (shoulder plates) -->
+              <path d="M14,58 Q26,50 36,64 L28,78 Q13,72 14,58Z" fill="#6b7280"/>
+              <path d="M14,58 Q26,50 36,64 L28,78 Q13,72 14,58Z" fill="none" stroke="#4b5563" stroke-width="1"/>
+              <path d="M106,58 Q94,50 84,64 L92,78 Q107,72 106,58Z" fill="#6b7280"/>
+              <path d="M106,58 Q94,50 84,64 L92,78 Q107,72 106,58Z" fill="none" stroke="#4b5563" stroke-width="1"/>
+              <!-- Pauldron highlight -->
+              <path d="M16,62 Q24,55 33,65" fill="none" stroke="#9ca3af" stroke-width="1" opacity=".5"/>
+              <path d="M104,62 Q96,55 87,65" fill="none" stroke="#9ca3af" stroke-width="1" opacity=".5"/>
+
+            {% elif armor_inv.item.name == '魔法のローブ' %}
+              <!-- ── Magic Robe ── flowing purple, arcane circle, runes -->
+              <!-- Flowing side panels -->
+              <path d="M20,58 Q26,54 35,64 L35,130 Q27,136 20,120 Z" fill="#6d28d9"/>
+              <path d="M100,58 Q94,54 85,64 L85,130 Q93,136 100,120 Z" fill="#6d28d9"/>
+              <!-- Main robe body -->
+              <rect x="27" y="60" width="66" height="72" rx="8" fill="#7c3aed"/>
+              <!-- Arcane circle (outer) -->
+              <circle class="rune-glow" cx="60" cy="88" r="16" fill="none" stroke="rgba(196,167,252,.55)" stroke-width="1.5" filter="url(#glow-sm)"/>
+              <!-- Arcane circle (inner) -->
+              <circle class="rune-glow" cx="60" cy="88" r="10" fill="none" stroke="rgba(196,167,252,.4)" stroke-width="1" style="animation-delay:.5s"/>
+              <!-- 6-pointed star -->
+              <polygon points="60,73 63,81 71,81 65,87 67,95 60,91 53,95 55,87 49,81 57,81"
+                       fill="none" stroke="rgba(251,191,36,.75)" stroke-width="1.2"/>
+              <circle cx="60" cy="88" r="3.5" fill="rgba(251,191,36,.85)"/>
+              <!-- Floating runes -->
+              <text class="rune-glow" x="34" y="108" font-size="8" fill="rgba(196,167,252,.9)" style="animation-delay:.3s">✦</text>
+              <text class="rune-glow" x="77" y="108" font-size="8" fill="rgba(196,167,252,.9)" style="animation-delay:1s">✦</text>
+              <text class="rune-glow" x="34" y="122" font-size="7" fill="rgba(196,167,252,.7)" style="animation-delay:.7s">◈</text>
+              <text class="rune-glow" x="78" y="122" font-size="7" fill="rgba(196,167,252,.7)" style="animation-delay:1.4s">◈</text>
+              <!-- Collar -->
+              <path d="M42,60 Q60,55 78,60 L75,72 Q60,67 45,72 Z" fill="#6d28d9"/>
+              <!-- Collar trim -->
+              <path d="M43,60 Q60,56 77,60" fill="none" stroke="rgba(251,191,36,.6)" stroke-width="1.5"/>
+            {% endif %}
+          {% else %}
+            <!-- Default tunic -->
+            <rect x="27" y="62" width="66" height="68" rx="10" fill="#374151"/>
+            <line x1="60" y1="67" x2="60" y2="127" stroke="#1f2937" stroke-width="1.5" opacity=".5"/>
+          {% endif %}
+
+          <!-- ══ SHIELD (right side, in front of right arm) ══ -->
+          {% if shield_inv %}
+            {% if shield_inv.item.name == '木の盾' %}
+              <!-- ── Wooden Round Shield ── -->
+              <circle cx="108" cy="94" r="17" fill="#78350f"/>
+              <circle cx="108" cy="94" r="14" fill="#92400e"/>
+              <!-- Wood grain rings -->
+              <circle cx="108" cy="94" r="10" fill="none" stroke="#5D2F0D" stroke-width="1" opacity=".5"/>
+              <circle cx="108" cy="94" r="6"  fill="none" stroke="#5D2F0D" stroke-width="1" opacity=".4"/>
+              <!-- Grain lines -->
+              <line x1="93" y1="94" x2="123" y2="94" stroke="#5D2F0D" stroke-width="1" opacity=".35"/>
+              <line x1="108" y1="79" x2="108" y2="109" stroke="#5D2F0D" stroke-width="1" opacity=".35"/>
+              <!-- Rim -->
+              <circle cx="108" cy="94" r="17" fill="none" stroke="#5D2F0D" stroke-width="2.5"/>
+              <!-- Iron boss (center) -->
+              <circle cx="108" cy="94" r="5.5" fill="#9ca3af"/>
+              <circle cx="108" cy="94" r="3.5" fill="#6b7280"/>
+              <circle cx="107" cy="93" r="1.2" fill="#d1d5db" opacity=".7"/>
+              <!-- Handle rivets -->
+              <circle cx="95"  cy="94" r="2" fill="#9ca3af"/>
+              <circle cx="121" cy="94" r="2" fill="#9ca3af"/>
+
+            {% elif shield_inv.item.name == '鉄の盾' %}
+              <!-- ── Iron Kite Shield ── -->
+              <path d="M92,76 L122,76 L122,98 Q108,114 108,114 Q108,114 92,98 Z" fill="#374151"/>
+              <path d="M95,79 L119,79 L119,97 Q108,111 108,111 Q108,111 95,97 Z" fill="#4b5563"/>
+              <!-- Cross emblem -->
+              <line x1="108" y1="80" x2="108" y2="111" stroke="#6b7280" stroke-width="3"/>
+              <line x1="95"  y1="90" x2="121" y2="90"  stroke="#6b7280" stroke-width="3"/>
+              <!-- Rim -->
+              <path d="M92,76 L122,76 L122,98 Q108,114 108,114 Q108,114 92,98 Z"
+                    fill="none" stroke="#9ca3af" stroke-width="1.5"/>
+              <!-- Top corner rivets -->
+              <circle cx="94"  cy="78" r="2.5" fill="#6b7280"/>
+              <circle cx="122" cy="78" r="2.5" fill="#6b7280"/>
+              <!-- Center jewel -->
+              <circle cx="108" cy="90" r="4" fill="#dc2626"/>
+              <circle cx="106.5" cy="88.5" r="1.5" fill="rgba(255,255,255,.65)"/>
+              <!-- Highlight edge -->
+              <path d="M94,78 L95,79 L95,97" fill="none" stroke="#9ca3af" stroke-width="1" opacity=".4"/>
+            {% endif %}
+          {% endif %}
+
+          <!-- ══ NECK ══ -->
+          <rect x="50" y="48" width="20" height="17" rx="4" fill="url(#sg)"/>
+
+          <!-- ══ HEAD ══ -->
+          <circle cx="60" cy="34" r="27" fill="url(#sg)"/>
+
+          <!-- ══ HELMET or HAIR ══ -->
+          {% if helmet_inv %}
+            {% if helmet_inv.item.name == '革の帽子' %}
+              <!-- ── Leather Cap ── dome + brim + button -->
+              <path d="M34,37 Q33,8 60,6 Q87,8 86,37" fill="#92400e"/>
+              <path d="M37,36 Q36,12 60,10 Q84,12 83,36" fill="none" stroke="#78350f" stroke-width="1" opacity=".5"/>
+              <!-- Brim -->
+              <rect x="27" y="33" width="66" height="8" rx="4" fill="#78350f"/>
+              <rect x="28" y="33" width="64" height="4" rx="2" fill="#92400e" opacity=".5"/>
+              <!-- Top button -->
+              <circle cx="60" cy="8"  r="4"   fill="#78350f"/>
+              <circle cx="60" cy="7"  r="2"   fill="#5D2F0D"/>
+              <!-- Band detail -->
+              <rect x="27" y="37" width="66" height="3" rx="1.5" fill="#5D2F0D" opacity=".4"/>
+
+            {% elif helmet_inv.item.name == '鉄の兜' %}
+              <!-- ── Iron Helm ── full plate, cheek guards, visor slit -->
+              <!-- Main helm skull -->
+              <path d="M33,42 Q33,5 60,3 Q87,5 87,42" fill="#6b7280"/>
+              <!-- Highlight ridge -->
+              <path d="M38,38 Q36,14 56,7" fill="none" stroke="#9ca3af" stroke-width="2" opacity=".4"/>
+              <!-- Crest ridge on top -->
+              <path d="M48,5 Q60,0 72,5" fill="none" stroke="#9ca3af" stroke-width="2.5"/>
+              <!-- Cheek guards -->
+              <rect x="33" y="36" width="11" height="22" rx="5" fill="#4b5563"/>
+              <rect x="76" y="36" width="11" height="22" rx="5" fill="#4b5563"/>
+              <rect x="34" y="37" width="9"  height="19" rx="4" fill="#6b7280" opacity=".4"/>
+              <rect x="77" y="37" width="9"  height="19" rx="4" fill="#6b7280" opacity=".4"/>
+              <!-- Visor area -->
+              <rect x="41" y="24" width="38" height="14" rx="4" fill="#374151"/>
+              <!-- Visor slit (eye opening) -->
+              <rect x="41" y="29" width="38" height="6"  rx="3" fill="#111827"/>
+              <!-- Nasal bar -->
+              <rect x="58" y="24" width="4"  height="18" rx="2" fill="#4b5563"/>
+              <!-- Aventail / neck guard -->
+              <rect x="33" y="54" width="54" height="7"  rx="3" fill="#4b5563" opacity=".8"/>
+
+            {% elif helmet_inv.item.name == '魔法の王冠' %}
+              <!-- ── Magic Crown ── gold points, gems, glow -->
+              <!-- Hair underneath (crown doesn't cover full head) -->
+              <ellipse cx="60" cy="11" rx="27" ry="17" fill="#8B4513"/>
+              <rect x="33" y="14" width="8" height="20" rx="4" fill="#8B4513"/>
+              <rect x="79" y="14" width="8" height="20" rx="4" fill="#8B4513"/>
+              <!-- Crown band -->
+              <rect x="34" y="16" width="52" height="11" rx="5" fill="#b8960c"/>
+              <rect x="34" y="18" width="52" height="9"  rx="4" fill="#ffd700"/>
+              <!-- Crown points (5) -->
+              <polygon points="37,18 40,2  43,18" fill="#ffd700"/>
+              <polygon points="49,18 52,2  55,18" fill="#ffd700"/>
+              <polygon points="57,18 60,-1 63,18" fill="#ffd700"/>
+              <polygon points="65,18 68,2  71,18" fill="#ffd700"/>
+              <polygon points="77,18 80,2  83,18" fill="#ffd700"/>
+              <!-- Gems on points -->
+              <circle class="crown-gem" cx="60" cy="3"  r="4"   fill="#ef4444" filter="url(#glow-sm)"/>
+              <circle cx="59" cy="2" r="1.3" fill="rgba(255,255,255,.8)"/>
+              <circle class="crown-gem" cx="41" cy="6"  r="3"   fill="#3b82f6" filter="url(#glow-sm)" style="animation-delay:.4s"/>
+              <circle class="crown-gem" cx="79" cy="6"  r="3"   fill="#22c55e" filter="url(#glow-sm)" style="animation-delay:.8s"/>
+              <circle class="crown-gem" cx="52" cy="5"  r="2.5" fill="#f59e0b" filter="url(#glow-sm)" style="animation-delay:.2s"/>
+              <circle class="crown-gem" cx="68" cy="5"  r="2.5" fill="#ec4899" filter="url(#glow-sm)" style="animation-delay:1s"/>
+              <!-- Band gems -->
+              <ellipse cx="47" cy="22" rx="3.5" ry="2.5" fill="#7c3aed"/>
+              <ellipse cx="60" cy="22" rx="3.5" ry="2.5" fill="#dc2626"/>
+              <ellipse cx="73" cy="22" rx="3.5" ry="2.5" fill="#7c3aed"/>
+              <!-- Band highlight -->
+              <rect x="35" y="19" width="50" height="2" rx="1" fill="rgba(255,255,255,.35)"/>
+            {% endif %}
+          {% else %}
+            <!-- Default hair -->
+            <ellipse cx="60" cy="10" rx="27" ry="17" fill="#8B4513"/>
+            <rect x="33" y="14" width="9"  height="23" rx="4" fill="#8B4513"/>
+            <rect x="78" y="14" width="9"  height="23" rx="4" fill="#8B4513"/>
+          {% endif %}
+
+          <!-- ══ FACE ══ -->
+          <!-- Eye whites -->
+          <ellipse cx="50" cy="30" rx="6.5" ry="5.5" fill="white"/>
+          <ellipse cx="70" cy="30" rx="6.5" ry="5.5" fill="white"/>
+          <!-- Pupils -->
+          <circle cx="51" cy="31" r="3.5" fill="#1a1a2e"/>
+          <circle cx="71" cy="31" r="3.5" fill="#1a1a2e"/>
+          <!-- Eye shine -->
+          <circle cx="52.5" cy="29.5" r="1.3" fill="white"/>
+          <circle cx="72.5" cy="29.5" r="1.3" fill="white"/>
+          <!-- Eyebrows -->
+          <path d="M43 21 Q50 18 57 21" stroke="#5D2F0D" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M63 21 Q70 18 77 21" stroke="#5D2F0D" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <!-- Nose -->
+          <path d="M57,37 L55,43 Q60,45.5 65,43 L63,37" fill="#d4956a" opacity=".5"/>
+          <!-- Mouth (smile) -->
+          <path d="M52,47 Q60,54.5 68,47" stroke="#b06040" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <!-- Blush -->
+          <ellipse cx="41" cy="40" rx="8" ry="5" fill="#f9a8d4" opacity=".32"/>
+          <ellipse cx="79" cy="40" rx="8" ry="5" fill="#f9a8d4" opacity=".32"/>
+
+          <!-- ══ WEAPON (drawn last = always in front) ══ -->
+          {% if weapon_inv %}
+            {% if weapon_inv.item.name == '木の剣' %}
+              <!-- ── Wooden Sword ── simple, warm-toned blade -->
+              <!-- Blade -->
+              <path d="M10,104 L18,104 L14.5,170 Z" fill="#c4a35a"/>
+              <line x1="14.5" y1="104" x2="14.5" y2="170" stroke="#e5c97e" stroke-width="1.2" opacity=".6"/>
+              <!-- Crossguard -->
+              <rect x="4"  y="100" width="21" height="5.5" rx="2.75" fill="#78350f"/>
+              <circle cx="4"  cy="102.75" r="3" fill="#92400e"/>
+              <circle cx="25" cy="102.75" r="3" fill="#92400e"/>
+              <!-- Grip -->
+              <rect x="11.5" y="85" width="6" height="15" rx="2.5" fill="#5D4037"/>
+              <!-- Grip wrapping -->
+              <line x1="11.5" y1="88"  x2="17.5" y2="88"  stroke="#8B6914" stroke-width="1.2"/>
+              <line x1="11.5" y1="92"  x2="17.5" y2="92"  stroke="#8B6914" stroke-width="1.2"/>
+              <line x1="11.5" y1="96"  x2="17.5" y2="96"  stroke="#8B6914" stroke-width="1.2"/>
+              <!-- Pommel -->
+              <ellipse cx="14.5" cy="84" rx="6" ry="5" fill="#78350f"/>
+              <ellipse cx="13"   cy="83" rx="2" ry="1.5" fill="#92400e" opacity=".7"/>
+
+            {% elif weapon_inv.item.name == '鉄の剣' %}
+              <!-- ── Iron Sword ── wider blade, elaborate guard, metallic -->
+              <!-- Blade (tapered) -->
+              <path d="M9,102 L19,102 L14.5,173 Z" fill="#9ca3af"/>
+              <!-- Fuller groove -->
+              <line x1="14.5" y1="102" x2="14.5" y2="168" stroke="#d1d5db" stroke-width="1.8" opacity=".7"/>
+              <!-- Blade edge highlight -->
+              <line x1="9"    y1="102" x2="14"   y2="173" stroke="rgba(255,255,255,.25)" stroke-width="1"/>
+              <!-- Crossguard (wider, ornate) -->
+              <rect x="3"  y="96" width="24" height="7" rx="3.5" fill="#6b7280"/>
+              <!-- Guard ends -->
+              <ellipse cx="3"  cy="99.5" rx="4" ry="4" fill="#4b5563"/>
+              <ellipse cx="27" cy="99.5" rx="4" ry="4" fill="#4b5563"/>
+              <circle  cx="3"  cy="99.5" r="1.8" fill="#9ca3af"/>
+              <circle  cx="27" cy="99.5" r="1.8" fill="#9ca3af"/>
+              <!-- Grip -->
+              <rect x="11.5" y="78" width="6" height="18" rx="2.5" fill="#78350f"/>
+              <!-- Grip wrapping -->
+              <line x1="11.5" y1="81" x2="17.5" y2="81" stroke="#92400e" stroke-width="1.5"/>
+              <line x1="11.5" y1="85" x2="17.5" y2="85" stroke="#92400e" stroke-width="1.5"/>
+              <line x1="11.5" y1="89" x2="17.5" y2="89" stroke="#92400e" stroke-width="1.5"/>
+              <line x1="11.5" y1="93" x2="17.5" y2="93" stroke="#92400e" stroke-width="1.5"/>
+              <!-- Pommel (round) -->
+              <circle cx="14.5" cy="77" r="7" fill="#6b7280"/>
+              <circle cx="14.5" cy="77" r="4" fill="#4b5563"/>
+              <circle cx="13"   cy="75.5" r="1.8" fill="#9ca3af" opacity=".7"/>
+
+            {% elif weapon_inv.item.name == '魔法の杖' %}
+              <!-- ── Magic Staff ── tall pole, glowing orb at top -->
+              <!-- Pole (extends above head) -->
+              <rect x="12" y="44" width="5" height="130" rx="2.5" fill="#5D2F0D"/>
+              <line x1="14.5" y1="44" x2="14.5" y2="174" stroke="#8B5E3C" stroke-width="1" opacity=".5"/>
+              <!-- Bottom cap -->
+              <ellipse cx="14.5" cy="174" rx="4.5" ry="3.5" fill="#3d1a0a"/>
+              <!-- Ring ornament at top -->
+              <ellipse cx="14.5" cy="52" rx="9" ry="4.5" fill="none" stroke="#a855f7" stroke-width="1.8" filter="url(#glow-sm)"/>
+              <!-- Orb glow (outer) -->
+              <circle class="orb-pulse" cx="14.5" cy="40" r="16" fill="rgba(167,139,250,.18)" filter="url(#glow)"/>
+              <!-- Orb glow (mid) -->
+              <circle class="orb-pulse" cx="14.5" cy="40" r="11" fill="rgba(167,139,250,.35)" style="animation-delay:.3s"/>
+              <!-- Orb core -->
+              <circle cx="14.5" cy="40" r="8"  fill="#7c3aed"/>
+              <circle cx="14.5" cy="40" r="5"  fill="#a855f7"/>
+              <!-- Orb inner shimmer -->
+              <circle cx="12"   cy="37" r="2.5" fill="rgba(255,255,255,.75)"/>
+              <circle cx="16"   cy="41" r="1.2" fill="rgba(255,255,255,.4)"/>
+              <!-- Magic particles along staff -->
+              <circle class="rune-glow" cx="11" cy="80"  r="1.5" fill="#c084fc" style="animation-delay:.2s"/>
+              <circle class="rune-glow" cx="18" cy="105" r="1.5" fill="#c084fc" style="animation-delay:.9s"/>
+              <circle class="rune-glow" cx="11" cy="130" r="1.5" fill="#c084fc" style="animation-delay:1.5s"/>
+            {% endif %}
+          {% endif %}
+
+          </g><!-- end avatar-bob group -->
+        </svg>
+      </div>
+
+      <!-- Stats bars -->
+      {% set stats = [
+        ('❤ HP',   avatar.base_hp,      avatar.total_hp      - avatar.base_hp,      '#f87171', 200),
+        ('⚔ ATK',  avatar.base_attack,  avatar.total_attack  - avatar.base_attack,  '#fb923c', 50),
+        ('🛡 DEF',  avatar.base_defense, avatar.total_defense - avatar.base_defense, '#60a5fa', 50),
+        ('💨 AGI',  avatar.base_agility, avatar.total_agility - avatar.base_agility, '#4ade80', 30),
+      ] %}
+      {% for label, base, bonus, color, cap in stats %}
+      <div class="stat-bar-wrap">
+        <div class="stat-bar-label">
+          <span class="stat-bar-name">{{ label }}</span>
+          <span class="stat-bar-val" style="color:{{ color }};">
+            {{ base + bonus }}
+            {% if bonus > 0 %}<span style="color:var(--success);font-size:.7rem;">(+{{ bonus }})</span>{% endif %}
+          </span>
+        </div>
+        <div class="stat-bar-track">
+          <div class="stat-bar-fill" style="background:{{ color }};width:{{ [(base/cap*100)|int,100]|min }}%;"></div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Level -->
+      <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:10px;border:1px solid rgba(255,215,0,.25);">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#e94560);
+                      display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:#fff;
+                      border:2px solid var(--gold);flex-shrink:0;">{{ avatar.level }}</div>
+          <div>
+            <div style="font-weight:700;font-size:.9rem;">Lv.{{ avatar.level }}</div>
+            <div style="font-size:.72rem;color:var(--dim);">次のLvまで {{ 10 - avatar.level_progress }} pt</div>
+          </div>
+        </div>
+        <div style="background:var(--bg4);border-radius:5px;height:7px;overflow:hidden;">
+          <div style="height:100%;width:{{ avatar.level_progress * 10 }}%;background:linear-gradient(90deg,#7c3aed,var(--gold));border-radius:5px;transition:width .4s;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Equipment slots -->
+    <div class="card">
+      <div class="card-title">🎽 装備スロット</div>
+      {% for slot_type, slot_label, slot_icon in [
+          ('helmet','兜','🪖'),('weapon','武器','🗡'),
+          ('armor','鎧','🥋'),('shield','盾','🔰'),('boots','靴','👟') ] %}
+      {% set eq = equipped_by_type.get(slot_type) %}
+      <div class="equip-slot {% if eq %}filled{% endif %}" style="margin-bottom:8px;">
+        <div class="slot-icon">{{ eq.item.emoji if eq else slot_icon }}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="slot-label">{{ slot_label }}</div>
+          {% if eq %}
+          <div class="slot-name">{{ eq.item.name }}</div>
+          <div class="slot-bonus">{{ eq.item.stat_summary }}</div>
+          {% else %}
+          <div style="font-size:.82rem;color:var(--dim);">未装備</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ══════════════ MIDDLE: Inventory ══════════════ -->
+  <div class="card">
+    <div class="card-title">🎒 所持アイテム
+      <span style="color:var(--dim);font-size:.8rem;font-weight:500;">{{ inventory_items|length }}件</span>
+    </div>
+    {% if inventory_items %}
+      {% for t, lbl in [('helmet','兜'),('weapon','武器'),('armor','鎧'),('shield','盾'),('boots','靴')] %}
+        {% set group = inventory_items | selectattr('item.item_type','equalto',t) | list %}
+        {% if group %}
+        <div class="section-hdr">{{ lbl }}</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          {% for inv in group %}
+          <div class="inv-item {% if inv.is_equipped %}equipped{% endif %}">
+            <div class="item-emoji">{{ inv.item.emoji }}</div>
+            <div class="item-info">
+              <div class="item-name">
+                {{ inv.item.name }}
+                <span class="badge badge-{{ inv.item.rarity }}" style="font-size:.63rem;margin-left:4px;">
+                  {{ {'epic':'EPIC','rare':'RARE','common':'COMMON'}[inv.item.rarity] }}
+                </span>
+              </div>
+              <div class="item-bonus">{{ inv.item.stat_summary }}</div>
+              {% if inv.is_equipped %}
+              <div style="font-size:.7rem;color:var(--success);font-weight:700;margin-top:2px;">✅ 装備中</div>
+              {% endif %}
+            </div>
+            <div style="flex-shrink:0;">
+              {% if inv.is_equipped %}
+              <form method="POST" action="/avatar/unequip/{{ inv.id }}">
+                <button class="btn btn-ghost btn-sm" type="submit">外す</button>
+              </form>
+              {% else %}
+              <form method="POST" action="/avatar/equip/{{ inv.id }}">
+                <button class="btn btn-success btn-sm" type="submit">装備</button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:48px 20px;color:var(--dim);">
+      <div style="font-size:2.5rem;margin-bottom:12px;">🎒</div>
+      <div style="font-size:.9rem;">所持アイテムがありません。<br>ショップで購入しよう！</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ══════════════ RIGHT: Shop ══════════════ -->
+  <div class="card">
+    <div class="card-title">🏪 ショップ
+      <span style="color:var(--gold);font-size:.82rem;font-weight:600;margin-left:8px;">⭐ {{ avatar.points }} pt</span>
+    </div>
+    {% for t, lbl in [('helmet','兜'),('weapon','武器'),('armor','鎧'),('shield','盾'),('boots','靴')] %}
+      {% set group = shop_items | selectattr('item_type','equalto',t) | list %}
+      {% if group %}
+      <div class="section-hdr">{{ lbl }}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        {% for item in group %}
+        {% set owned = item.id in owned_item_ids %}
+        <div class="shop-item" style="{% if owned %}opacity:.55;{% endif %}
+             {% if item.rarity=='epic' %}border-color:rgba(192,132,252,.4);
+             {% elif item.rarity=='rare' %}border-color:rgba(96,165,250,.35);{% endif %}">
+          <div class="item-emoji">{{ item.emoji }}</div>
+          <div class="item-info">
+            <div class="item-name">
+              {{ item.name }}
+              <span class="badge badge-{{ item.rarity }}" style="font-size:.63rem;margin-left:4px;">
+                {{ {'epic':'EPIC','rare':'RARE','common':'COMMON'}[item.rarity] }}
+              </span>
+            </div>
+            <div class="item-bonus">{{ item.stat_summary }}</div>
+            <div class="item-price">⭐ {{ item.price }} pt</div>
+          </div>
+          <div style="flex-shrink:0;">
+            {% if owned %}
+            <span style="font-size:.73rem;color:var(--success);font-weight:700;">所持済み</span>
+            {% else %}
+            <form method="POST" action="/shop/buy/{{ item.id }}">
+              <button class="btn btn-gold btn-sm" type="submit"
+                      {% if avatar.points < item.price %}disabled style="opacity:.4;cursor:not-allowed;"{% endif %}>
+                購入
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

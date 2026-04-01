@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG タスクマネージャー</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0d1a;
+      --bg2:      #13131f;
+      --bg3:      #1a1a2e;
+      --bg4:      #222240;
+      --accent:   #e94560;
+      --gold:     #ffd700;
+      --gold-dim: #b8960c;
+      --text:     #e2e8f0;
+      --dim:      #8892a4;
+      --border:   #2a2a45;
+      --common:   #94a3b8;
+      --rare:     #60a5fa;
+      --epic:     #c084fc;
+      --success:  #4ade80;
+      --warn:     #fbbf24;
+      --error:    #f87171;
+      --info:     #38bdf8;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ===== Navbar ===== */
+    .navbar {
+      background: var(--bg2);
+      border-bottom: 2px solid var(--accent);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 4px 24px rgba(233,69,96,.25);
+    }
+    .navbar-brand {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--gold);
+      text-decoration: none;
+      letter-spacing: 1px;
+      text-shadow: 0 0 12px rgba(255,215,0,.5);
+    }
+    .navbar-nav { display: flex; gap: 6px; }
+    .nav-link {
+      color: var(--dim);
+      text-decoration: none;
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: background .15s, color .15s;
+    }
+    .nav-link:hover { background: rgba(233,69,96,.15); color: var(--text); }
+    .nav-link.active { background: var(--accent); color: #fff; }
+    .navbar-pts {
+      background: linear-gradient(135deg, var(--bg3), var(--bg4));
+      border: 1px solid var(--gold-dim);
+      border-radius: 20px;
+      padding: 5px 16px;
+      color: var(--gold);
+      font-weight: 700;
+      font-size: .875rem;
+      white-space: nowrap;
+    }
+
+    /* ===== Flash ===== */
+    .flash-wrap { padding: 10px 24px 0; }
+    .flash {
+      padding: 11px 16px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: .875rem;
+      animation: fadeDown .3s ease;
+    }
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .flash-success { background: rgba(74,222,128,.12); border: 1px solid var(--success); color: var(--success); }
+    .flash-error   { background: rgba(248,113,113,.12); border: 1px solid var(--error);   color: var(--error);   }
+    .flash-warning { background: rgba(251,191,36,.12);  border: 1px solid var(--warn);    color: var(--warn);    }
+    .flash-info    { background: rgba(56,189,248,.12);  border: 1px solid var(--info);    color: var(--info);    }
+
+    /* ===== Layout ===== */
+    .container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+    /* ===== Card ===== */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: .5px;
+    }
+
+    /* ===== Buttons ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: .83rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: filter .15s, transform .1s;
+      white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-primary  { background: var(--accent);  color: #fff; }
+    .btn-success  { background: #16a34a;        color: #fff; }
+    .btn-danger   { background: #dc2626;        color: #fff; }
+    .btn-info     { background: #0369a1;        color: #fff; }
+    .btn-gold     { background: var(--gold);    color: #1a1a2e; }
+    .btn-ghost    { background: var(--bg4);     color: var(--text); border: 1px solid var(--border); }
+    .btn-sm       { padding: 5px 10px; font-size: .77rem; }
+    .btn-full     { width: 100%; justify-content: center; }
+
+    /* ===== Badges ===== */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 9px;
+      border-radius: 10px;
+      font-size: .72rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+    .badge-not-started { background: rgba(100,116,139,.2); color: var(--common); border-color: #475569; }
+    .badge-in-progress { background: rgba(59,130,246,.2);  color: var(--rare);   border-color: #3b82f6; }
+    .badge-withdrawn   { background: rgba(239,68,68,.2);   color: var(--error);  border-color: #ef4444; }
+    .badge-completed   { background: rgba(34,197,94,.2);   color: var(--success);border-color: #22c55e; }
+    .badge-common { background: rgba(148,163,184,.15); color: var(--common); border-color: #475569; }
+    .badge-rare   { background: rgba(96,165,250,.15);  color: var(--rare);   border-color: #3b82f6; }
+    .badge-epic   { background: rgba(192,132,252,.15); color: var(--epic);   border-color: #a855f7; }
+
+    /* ===== Forms ===== */
+    input[type=text], textarea, select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 13px;
+      border-radius: 8px;
+      width: 100%;
+      font-size: .875rem;
+      transition: border-color .15s;
+    }
+    input[type=text]:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(233,69,96,.2);
+    }
+    select option { background: var(--bg2); }
+    textarea { resize: vertical; }
+    label { display: block; margin-bottom: 6px; font-size: .8rem; color: var(--dim); font-weight: 600; }
+
+    /* ===== Scrollbar ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+    /* ===== Stat bar ===== */
+    .stat-bar-wrap { margin-bottom: 14px; }
+    .stat-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: .78rem;
+      margin-bottom: 4px;
+    }
+    .stat-bar-name { color: var(--dim); font-weight: 600; }
+    .stat-bar-val  { color: var(--text); font-weight: 700; }
+    .stat-bar-track {
+      height: 7px;
+      background: var(--bg4);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .stat-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width .4s ease;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">⚔ RPGタスクマネージャー</a>
+    <div class="navbar-nav">
+      <a href="/" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">📋 タスク</a>
+      <a href="/mypage" class="nav-link {% if request.endpoint == 'mypage' %}active{% endif %}">🧙 マイページ</a>
+    </div>
+    {% if avatar %}
+    <div class="navbar-pts">⭐ {{ avatar.points }} pt</div>
+    {% endif %}
+  </nav>
+
+  <div class="flash-wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="flash flash-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+    {% endwith %}
+  </div>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>
